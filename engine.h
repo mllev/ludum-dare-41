@@ -55,8 +55,8 @@ static void vector_init (vector *v, float x, float y)
 
 void engine_init (engine *e, int *map, int mw, int mh, unsigned int *buf, int bw, int bh)
 {
-  vector_init(&e->pos, 5.0, 0.0);
-  vector_init(&e->dir, 0.0, 1.0);
+  vector_init(&e->pos, 5.0, 9.0);
+  vector_init(&e->dir, 0.0, -1.0);
   vector_init(&e->plane, 0.7, 0.0);
 
   e->scale = ((float)bh / (float)bw) * e->plane.x;
@@ -109,7 +109,8 @@ void engine_draw_walls (engine *e)
     float wallDist, xWall;
     unsigned int color;
     int y1, y2, lineHeight;
-    int texCol, texId, texStart;
+    int texCol, texId;
+    float texStart, texStep;
 
     /* create the ray vector */
     vector_scale(&scaled, &e->plane, rayCam);
@@ -162,26 +163,32 @@ void engine_draw_walls (engine *e)
       wallDist = (yMap - e->pos.y + (1 - yStep) / 2) / ray.y;
     }
 
-    y1 = -0.5 / (wallDist * e->scale) * hh + hh;
-    y2 =  0.5 / (wallDist * e->scale) * hh + hh;
+    /* we use 0.52 intead of 0.5 because it fixes some visual 
+       errors when rendering floors */
+    y1 = -0.522 / (wallDist * e->scale) * hh + hh;
+    y2 =  0.522 / (wallDist * e->scale) * hh + hh;
     lineHeight = y2 - y1;
 
     if (side == 0) xWall = e->pos.y + wallDist * ray.y;
     else xWall = e->pos.x + wallDist * ray.x;
     xWall -= floor(xWall);
 
-    texStart = 0;
+    texStart = 0.0;
+    texStep = 63.0 / (float)lineHeight;
     texCol = (int)(xWall * 64);
-    if ((side == 0 && ray.x > 0) || (side == 1 && ray.y < 0))
+
+    if ((side == 0 && ray.x > 0) || (side == 1 && ray.y < 0)) {
       texCol = 64 - texCol - 1;
+    }
 
     if (y1 < 0) y1 = 0;
     if (y2 >= e->height) {
+      texStart += (texStep * (y2 - e->height));
       y2 = e->height - 1;
     }
 
     if (y1 < y2) {
-      int y, count;
+      int count;
       unsigned int *dst = e->buf;
 
       /* y = 0 is at the top */
@@ -190,21 +197,16 @@ void engine_draw_walls (engine *e)
 
       count = y1 - y2;
       dst = e->buf + x + (y2 * e->width);
-      y = y2;
 
       do {
-        int d = y * 256 - e->height * 128 + lineHeight * 128;
-        int texY = ((d * 64) / lineHeight) / 256;
-
-        if (texY > 63) texY = 63;
-        if (texY < 0) texY = 0;
+        int texY = (int)ceil(texStart) & 63;
 
         color = engine_textures[texId][(texY << 6) + texCol];
         if (side == 1) color = (color >> 1) & 8355711;
 
         *dst = color;
         dst += e->width;
-        y++;
+        texStart += texStep;
       } while (count--);
     }
   }
@@ -218,7 +220,7 @@ void engine_draw_plane (engine *e, int offs, int stride, int texId)
   float hh = (float)e->height / 2.0;
   float zPrev;
   float zInvStart = 1.0;
-  float zInvEnd = 1.0 / 10000.0;
+  float zInvEnd = 1.0 / 1000.0;
   float zInvStep = (zInvEnd - zInvStart) / hh;
   float uStep, vStep, u, v, u1, v1, u2, v2;
   vector leftMost, rightMost, scaled;
@@ -232,11 +234,11 @@ void engine_draw_plane (engine *e, int offs, int stride, int texId)
   vector_scale(&scaled, &e->plane, 1);
   vector_add(&rightMost, &e->dir, &scaled);
 
-  textCoordLeft.x = leftMost.x + e->pos.x;
-  textCoordLeft.y = leftMost.y + e->pos.y;
+  textCoordLeft.x = leftMost.x + e->pos.x - (0.014);
+  textCoordLeft.y = leftMost.y + e->pos.y - (0.014);
 
-  textCoordRight.x = rightMost.x + e->pos.x;
-  textCoordRight.y = rightMost.y + e->pos.y;
+  textCoordRight.x = rightMost.x + e->pos.x - (0.014);
+  textCoordRight.y = rightMost.y + e->pos.y - (0.014);
 
   for (y = 0; y < (int)hh; y++) {
     float zStep = (1.0 / zInvStart) - zPrev;
@@ -250,11 +252,11 @@ void engine_draw_plane (engine *e, int offs, int stride, int texId)
     textCoordRight.x += (rightMost.x * zStep);
     textCoordRight.y += (rightMost.y * zStep);
 
-    u1 = textCoordLeft.x * 63;
-    v1 = textCoordLeft.y * 63;
+    u1 = textCoordLeft.x * 64;
+    v1 = textCoordLeft.y * 64;
 
-    u2 = textCoordRight.x * 63;
-    v2 = textCoordRight.y * 63;
+    u2 = textCoordRight.x * 64;
+    v2 = textCoordRight.y * 64;
 
     uStep = (u2 - u1) / e->width;
     vStep = (v2 - v1) / e->width;

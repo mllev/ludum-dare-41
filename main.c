@@ -20,9 +20,9 @@ int map_data[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 2, 2, 2, 2, 0, 0, 0,
-  0, 0, 0, 2, 0, 0, 2, 0, 0, 0,
-  0, 0, 0, 2, 0, 0, 2, 0, 0, 0,
-  0, 0, 0, 2, 2, 0, 2, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 2, 0, 0, 0,
+  0, 0, 0, 1, 0, 0, 2, 0, 0, 0,
+  0, 0, 0, 1, 1, 0, 2, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -73,8 +73,8 @@ int main (int argc, char **argv)
 
     start = windowGetTicks();
 
-    if (window.keys.left)  engine_rotate_cam(&e, -0.02);
-    if (window.keys.right) engine_rotate_cam(&e, 0.02);
+    if (window.keys.left)  engine_rotate_cam(&e, 0.02);
+    if (window.keys.right) engine_rotate_cam(&e, -0.02);
     if (window.keys.a)     engine_move_cam_right(&e, -0.05);
     if (window.keys.d)     engine_move_cam_right(&e, 0.05);
     if (window.keys.w)     engine_move_cam_forward(&e, 0.05);
