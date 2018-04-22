@@ -147,11 +147,11 @@ void engine_draw_walls (engine *e)
         yMap += yStep;
         side = 1;
       }
-      texId = e->map[yMap * e->mapWidth + xMap];
+      texId = e->map[yMap * e->mapWidth + xMap] - 1;
       if (xMap >= e->mapWidth || xMap < 0 || yMap >= e->mapHeight || yMap < 0) {
         texId = 1;
         hit = 1;
-      } else if ((texId - 1) > -1) {
+      } else if (texId > -1) {
         hit = 1;
       }
     }
