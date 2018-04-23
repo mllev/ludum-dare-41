@@ -15,5 +15,5 @@ debug:
 	$(CMD) -g && lldb a.out
 
 clean:
-	rm game a.out
+	rm game a.out && rm -rf a.out.dSYM
 	

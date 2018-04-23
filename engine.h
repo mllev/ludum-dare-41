@@ -16,13 +16,15 @@ typedef struct engine {
   int mapWidth;
   int mapHeight;
 
+  float zbuf[1920];
+
   int width;
   int height;
 } engine;
 
 #ifdef ENGINE_IMPL
 
-unsigned int engine_textures[3][4096];
+unsigned int engine_textures[4][4096];
 
 static void vector_add (vector *out, vector *v1, vector *v2)
 {
@@ -55,6 +57,8 @@ static void vector_init (vector *v, float x, float y)
 
 void engine_init (engine *e, int *map, int mw, int mh, unsigned int *buf, int bw, int bh)
 {
+  int i;
+
   vector_init(&e->pos, 5.0, 9.0);
   vector_init(&e->dir, 0.0, -1.0);
   vector_init(&e->plane, 0.7, 0.0);
@@ -67,6 +71,31 @@ void engine_init (engine *e, int *map, int mw, int mh, unsigned int *buf, int bw
   e->height = bh;
   e->mapWidth = mw;
   e->mapHeight = mh;
+
+  for (i = 0; i < 1920; i++) {
+    e->zbuf[i] = 1000.0;
+  }
+}
+
+void engine_handle_collisions (engine *e, vector* v)
+{
+  /*
+  int xMap = (int)floor(e->pos.x);
+  int yMap = (int)floor(e->pos.y);
+  */
+
+  int xMapNext = (int)floor(e->pos.x + v->x);
+  int yMapNext = (int)floor(e->pos.y + v->y);
+
+  if (
+    yMapNext >= e->mapHeight || yMapNext < 0 ||
+    xMapNext >= e->mapWidth  || xMapNext < 0 ||
+    e->map[yMapNext * e->mapWidth + xMapNext] > 0
+  ) {
+    /* if hitting top or bottom make y 0 otherwise make x 0 */
+    v->y = 0;
+    v->x = 0;
+  }
 }
 
 void engine_move_cam_forward (engine *e, float step)
@@ -74,6 +103,7 @@ void engine_move_cam_forward (engine *e, float step)
   vector move;
 
   vector_scale(&move, &e->dir, step);
+  engine_handle_collisions(e, &move);
 
   e->pos.x += move.x;
   e->pos.y += move.y;
@@ -84,6 +114,7 @@ void engine_move_cam_right (engine *e, float step)
   vector move;
 
   vector_scale(&move, &e->plane, step);
+  engine_handle_collisions(e, &move);
 
   e->pos.x += move.x;
   e->pos.y += move.y;
@@ -163,8 +194,8 @@ void engine_draw_walls (engine *e)
       wallDist = (yMap - e->pos.y + (1 - yStep) / 2) / ray.y;
     }
 
-    /* we use 0.52 intead of 0.5 because it fixes some visual 
-       errors when rendering floors */
+    /* we use 0.522 intead of 0.5 because it fixes some visual 
+       errors when rendering floors ONLY in 640x480 */
     y1 = -0.522 / (wallDist * e->scale) * hh + hh;
     y2 =  0.522 / (wallDist * e->scale) * hh + hh;
     lineHeight = y2 - y1;
@@ -173,7 +204,7 @@ void engine_draw_walls (engine *e)
     else xWall = e->pos.x + wallDist * ray.x;
     xWall -= floor(xWall);
 
-    texStart = 0.0;
+    texStart = 63.0;
     texStep = 63.0 / (float)lineHeight;
     texCol = (int)(xWall * 64);
 
@@ -183,7 +214,7 @@ void engine_draw_walls (engine *e)
 
     if (y1 < 0) y1 = 0;
     if (y2 >= e->height) {
-      texStart += (texStep * (y2 - e->height));
+      texStart -= (texStep * (y2 - e->height));
       y2 = e->height - 1;
     }
 
@@ -197,16 +228,17 @@ void engine_draw_walls (engine *e)
 
       count = y1 - y2;
       dst = e->buf + x + (y2 * e->width);
+      e->zbuf[x] = wallDist;
 
       do {
-        int texY = (int)ceil(texStart) & 63;
+        int texY = (int)floor(texStart) & 63;
 
         color = engine_textures[texId][(texY << 6) + texCol];
         if (side == 1) color = (color >> 1) & 8355711;
 
         *dst = color;
         dst += e->width;
-        texStart += texStep;
+        texStart -= texStep;
       } while (count--);
     }
   }
@@ -220,7 +252,7 @@ void engine_draw_plane (engine *e, int offs, int stride, int texId)
   float hh = (float)e->height / 2.0;
   float zPrev;
   float zInvStart = 1.0;
-  float zInvEnd = 1.0 / 1000.0;
+  float zInvEnd = 1.0 / 10000.0;
   float zInvStep = (zInvEnd - zInvStart) / hh;
   float uStep, vStep, u, v, u1, v1, u2, v2;
   vector leftMost, rightMost, scaled;
@@ -234,11 +266,11 @@ void engine_draw_plane (engine *e, int offs, int stride, int texId)
   vector_scale(&scaled, &e->plane, 1);
   vector_add(&rightMost, &e->dir, &scaled);
 
-  textCoordLeft.x = leftMost.x + e->pos.x - (0.014);
-  textCoordLeft.y = leftMost.y + e->pos.y - (0.014);
+  textCoordLeft.x = (leftMost.x) + e->pos.x;
+  textCoordLeft.y = (leftMost.y) + e->pos.y;
 
-  textCoordRight.x = rightMost.x + e->pos.x - (0.014);
-  textCoordRight.y = rightMost.y + e->pos.y - (0.014);
+  textCoordRight.x = (rightMost.x) + e->pos.x;
+  textCoordRight.y = (rightMost.y) + e->pos.y;
 
   for (y = 0; y < (int)hh; y++) {
     float zStep = (1.0 / zInvStart) - zPrev;
@@ -282,10 +314,120 @@ void engine_draw_plane (engine *e, int offs, int stride, int texId)
   }
 }
 
+void engine_draw_quad (engine *e, int startX, int endX, int startY, int endY, float dist)
+{
+  int x, y;
+  int w = e->width, h = e->height;
+  unsigned int *buf, *dst;
+
+  /* todo: clip against the 1D z buffer */
+  
+  if (startY < 0) startY = 0;
+  if (startX < 0) startX = 0;
+
+  if (endY >= h) endY = h - 1;
+  if (endX >= w) endX = w - 1;
+
+  buf = e->buf + (w * startY) + startX;
+
+  for (x = startX; x <= endX; x++) {
+    dst = buf;
+    if (dist < e->zbuf[x]) {
+      for (y = startY; y <= endY; y++) {
+        unsigned int color = 0xffffff;
+        *dst = color;
+        dst += w;
+      }
+    }
+    buf++;
+  }
+}
+
+void engine_draw_textured_quad (engine *e, int startX, int endX, 
+  int startY, int endY, float dist, int texId)
+{
+  int x, y;
+  int w = e->width, h = e->height;
+  unsigned int color;
+  float ty, tx, tyStep, txStep;
+  int u, v;
+  float texStartY;
+
+  if (startX >= endX || startY >= endY)
+    return;
+
+  tx = 0;
+  texStartY = 63;
+  txStep = 63.0 / (endX - startX);
+  tyStep = 63.0 / (endY - startY);
+
+  if (startX < 0) {
+    tx += (txStep * abs(startX));
+    startX = 0;
+  }
+
+  if (startY < 0) {
+    texStartY -= (tyStep * abs(startY));
+    startY = 0;
+  }
+
+  if (endX >= w) endX = w - 1;
+  if (endY >= h) endY = h - 1;
+
+  for (x = startX; x <= endX; x++) {
+    ty = texStartY;
+    if (dist < e->zbuf[x]) {
+      for (y = startY; y <= endY; y++) {
+        u = (int)(ceil(ty)) & 63;
+        v = (int)(ceil(tx)) & 63;
+
+        if (y >= 0 && y < h && x >= 0 && x < w) {
+          color = engine_textures[texId][(u << 6) + v];
+          if (color & 0x00ffffff) e->buf[y * w + x] = color;
+        }
+
+        ty -= tyStep;
+      }
+    }
+    tx += txStep;
+  }
+}
+
 void engine_draw_sprites (engine *e)
 {
+  int h = e->height;
+  int w = e->width;
+  float invDet, transformX, transformY;
+  int spriteScreenX;
+  int spriteHeight, startY, endY;
+  int spriteWidth, startX, endX;
+
   vector sprite;
   vector_init(&sprite, 2.0, 2.0);
+
+  sprite.x -= e->pos.x;
+  sprite.y -= e->pos.y;
+
+  invDet = 1.0 / (e->plane.x * e->dir.y - e->dir.x * e->plane.y);
+  transformX = (e->dir.y * sprite.x - e->dir.x * sprite.y) * invDet;
+  transformY = (-e->plane.y * sprite.x + e->plane.x * sprite.y) * invDet;
+
+  if (transformY <= 0) {
+    return;
+  }
+
+  /* i don't understand this */
+  spriteScreenX = (int)((w / 2) * (1 + transformX / transformY));
+
+  spriteHeight = abs((int)(h / (transformY)));
+  startY = -spriteHeight / 2 + h / 2;
+  endY = spriteHeight / 2 + h / 2;
+
+  spriteWidth = abs((int)(h / (transformY)));
+  startX = -spriteWidth / 2 + spriteScreenX;
+  endX = spriteWidth / 2 + spriteScreenX;
+
+  engine_draw_textured_quad(e, startX, endX, startY, endY, transformY, 3);
 }
 
 void engine_draw (engine *e)
@@ -294,6 +436,8 @@ void engine_draw (engine *e)
   engine_draw_plane(e, 0, e->width, 1);
   engine_draw_walls(e);
   engine_draw_sprites(e);
+
+  engine_draw_textured_quad(e, 420 - 100, 420 + 100, 320, e->height - 1, -1, 2);
 }
 
 #endif
