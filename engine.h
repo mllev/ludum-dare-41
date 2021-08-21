@@ -40,8 +40,8 @@ static void vector_scale (vector *out, vector *v, float s)
 
 static void vector_rotate (vector *v, float a)
 {
-  float c = cosf(a);
-  float s = sinf(a);
+  float c = cos(a);
+  float s = sin(a);
   float y = c * v->y - s * v->x;
   float x = c * v->x + s * v->y;
 
@@ -126,6 +126,38 @@ void engine_rotate_cam (engine *e, float ang)
   vector_rotate(&e->plane, ang);
 }
 
+void draw_textured_vline (engine *e, int tid, int x, int y1, int y2, int texCol, float wallDist, int side)
+{
+  float texStart = 0.0; 
+  float texStep = 63.0 / (float)(y2 - y1);
+
+  if (y1 < 0) {
+    texStart += (texStep * (-y1));
+    y1 = 0;
+  }
+  if (y2 >= e->height) {
+    y2 = e->height - 1;
+  }
+
+  if (y1 < y2) {
+    unsigned int *dst = e->buf + x + (y1 * e->width);
+    int count = y2 - y1;
+
+    e->zbuf[x] = wallDist;
+
+    do {
+      unsigned int color;
+      int texY = (int)floor(texStart + 0.5) & 63;
+      color = (texY % 2 == 0) ? 0xffff0000 : 0xffffffff;
+      color = engine_textures[tid][(texY << 6) + texCol];
+      if (side == 1) color = (color >> 1) & 8355711;
+      *dst = color;
+      dst += e->width;
+      texStart += texStep;
+    } while (count--);
+  }
+}
+
 void engine_draw_walls (engine *e)
 {
   int x = 0;
@@ -194,53 +226,20 @@ void engine_draw_walls (engine *e)
       wallDist = (yMap - e->pos.y + (1 - yStep) / 2) / ray.y;
     }
 
-    /* we use 0.522 intead of 0.5 because it fixes some visual 
-       errors when rendering floors ONLY in 640x480 */
-    y1 = -0.522 / (wallDist * e->scale) * hh + hh;
-    y2 =  0.522 / (wallDist * e->scale) * hh + hh;
-    lineHeight = y2 - y1;
+    y1 = -0.5 / (wallDist * e->scale) * hh + hh;
+    y2 =  0.5 / (wallDist * e->scale) * hh + hh;
 
     if (side == 0) xWall = e->pos.y + wallDist * ray.y;
     else xWall = e->pos.x + wallDist * ray.x;
     xWall -= floor(xWall);
 
-    texStart = 63.0;
-    texStep = 63.0 / (float)lineHeight;
     texCol = (int)(xWall * 64);
 
     if ((side == 0 && ray.x > 0) || (side == 1 && ray.y < 0)) {
       texCol = 64 - texCol - 1;
     }
 
-    if (y1 < 0) y1 = 0;
-    if (y2 >= e->height) {
-      texStart -= (texStep * (y2 - e->height));
-      y2 = e->height - 1;
-    }
-
-    if (y1 < y2) {
-      int count;
-      unsigned int *dst = e->buf;
-
-      /* y = 0 is at the top */
-      y2 = e->height - 1 - y2;
-      y1 = e->height - 1 - y1;
-
-      count = y1 - y2;
-      dst = e->buf + x + (y2 * e->width);
-      e->zbuf[x] = wallDist;
-
-      do {
-        int texY = (int)floor(texStart) & 63;
-
-        color = engine_textures[texId][(texY << 6) + texCol];
-        if (side == 1) color = (color >> 1) & 8355711;
-
-        *dst = color;
-        dst += e->width;
-        texStart -= texStep;
-      } while (count--);
-    }
+    draw_textured_vline(e, texId, x, y1, y2, texCol, wallDist, side);
   }
 }
 

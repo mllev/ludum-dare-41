@@ -1,19 +1,10 @@
-CC=cc
 WARNS=-Wall -ansi -pedantic -std=c89
-CFLAGS=-O0
 LINUX=-I /usr/local/include -L /usr/local/lib -lSDL2
 MACOS=-framework SDL2
-CMD=$(CC) $(MACOS) $(CFLAGS) main.c $(WARNS)
 
-main:
-	$(CMD) -o game
+macos:
+	gcc main.c -O3 $(WARNS) $(MACOS) -o game && ./game
 
-run:
-	make && ./game
+linux:
+	gcc main.c -O3 $(WARNS) -lm -lSDL2 -o game && ./game
 
-debug:
-	$(CMD) -g && lldb a.out
-
-clean:
-	rm game a.out && rm -rf a.out.dSYM
-	
